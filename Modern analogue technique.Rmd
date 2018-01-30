@@ -1,0 +1,357 @@
+---
+title: "Modern analogue technique"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+cache = TRUE
+```
+
+## 1 Dissimilarity / distance metrics 
+
+The modern analogue technique is a statistical technique used to reconstruct past environments and climates. To reconstruct past environments, we need three data sets: 
+
+* modern species assemblages
+* modern environmental variables 
+* fossil species assemblages
+
+The basic assumption of the modern analogue technique is that similar environments result in similar species assemblages. In a first step a fossil species assemblage is compared to all modern species assemblages. Then the environmental values associated with  the *k* closest *modern analogues* are averaged to infer past environmental conditions.
+
+The distance/dissimilarity metric used to compare modern and fossil species assemblages is crucial. In a first step we will compare three distance/dissimilarity metrics:
+
+* Euclidean distance
+* Chord distance
+* Bray-Curtis distance
+
+We will test these metrics on the the North American Modern Pollen Database (Whitmore et al. 2005). These modern data are available from the *analogue* r-package by Gavin Simpson.
+
+
+```{r loadpackages, cache=FALSE, message = FALSE, warning=FALSE, results='hide'}
+  library(analogue)
+  library(rioja)
+  library(vegan)
+  library(maps)
+```
+
+```{r loaddata, cache=FALSE, message = FALSE, warning=FALSE}
+  data(Pollen)
+  data(Climate)
+  data(Location)
+  head(Pollen)
+  head(Climate)
+  head(Location)
+```
+
+The first three rows of the *climate* data seem odd. Latitudes and longitudes are different from lats and lons found in *location* and site names are real number and not characters. Additionally, January through March temperatures are missing. I therefore assume that the first three columns of *climate* are January through March temperatures.
+The pollen data are given as count data and contain *NAs*. We are interested in species composition / proportions and not in absolute abundances. We therefore have to transform count data to proportions.
+
+```{r datahandling, cache=FALSE, message = FALSE, warning=FALSE,results='hide'}
+  colnames(Climate)[1:3] <- c('tjan','tfeb','tmar')
+  Pollen.corrected <- replace(Pollen,is.na(Pollen),0)
+  pollen.prop <- Pollen.corrected/rowSums(Pollen.corrected)
+```
+
+To get an overview of the North American Modern Pollen Database we want to make a map of pollen samples
+
+```{r map, cache=FALSE, message = FALSE, warning=FALSE}
+lon <- Location$Longitude 
+lat <- Location$Latitude 
+map(regions=c('USA','Canada','Greenland'),xlim=c(range(lon)),ylim=range(lat))
+points(lon,lat,pch = 15,cex =0.25,col='darkgreen')
+```
+
+
+Lets look at dissimilarities with the NAMPD. We will compare the distance / dissimilarity between the northernmost and southernmost sample and two spatially close samples to 1000 distances / dissimilarities between randomly drawn samples. Keep in mind that the minimum of all dissimilarity metrics is 0 while the chord distance has a maximum of `r sqrt(2)` and the Bray-Curtis distance has a maximum of 1. 
+
+
+```{r distances, cache=TRUE, message = FALSE, warning=FALSE,tidy=TRUE}
+nm.pollen <- pollen.prop[which.max(lat),] 
+sm.pollen <- pollen.prop[which.min(lat),] 
+pollen.sn <- rbind(nm.pollen,sm.pollen)
+pollen.prop.lat.order <- pollen.prop[order(lat),]
+
+
+dist.sn.chord <- analogue::distance(pollen.sn,method='chord')
+dist.sn.euclidean <- analogue::distance(pollen.sn,method='euclidean')
+dist.sn.bray <- analogue::distance(pollen.sn,method='bray')
+
+dist.sn <- data.frame(chord = dist.sn.chord[1,2],euclidean = dist.sn.euclidean[1,2],bray = dist.sn.bray[1,2])
+
+dist.adj.chord <- analogue::distance(pollen.prop.lat.order[2:3,],method='chord')
+dist.adj.euclidean <- analogue::distance(pollen.prop.lat.order[2:3,],method='euclidean')
+dist.adj.bray <- analogue::distance(pollen.prop.lat.order[2:3,],method='bray')
+
+dist.adj <- data.frame(chord = dist.adj.chord[1,2],euclidean = dist.adj.euclidean[1,2],bray = dist.adj.bray[1,2])
+#---------------------------------------------------------------------------------------------
+#1000 random distances
+#---------------------------------------------------------------------------------------------
+dist.rand <-
+  replicate(1000,{
+    sample.nr <- sample(1:ncol(Pollen),2,replace=FALSE)
+    pollen.sample <- pollen.prop[sample.nr,]
+    dist.r.chord <- analogue::distance(pollen.sample,method='chord')
+    dist.r.euclidean <- analogue::distance(pollen.sample,method='euclidean')
+    dist.r.bray <- analogue::distance(pollen.sample,method='bray')
+    data.frame(chord = dist.r.chord[1,2], euclid = dist.r.euclidean[1,2],bray = dist.r.bray[1,2])
+  })
+
+dist.rand.matrix <- matrix(unlist(dist.rand),nrow=1000,ncol=3,byrow=TRUE)
+colnames(dist.rand.matrix) <- c('chord','euclidean','bray')
+
+dist.rand.quantiles <- apply(dist.rand.matrix,2,function(x) quantile(x,probs=c(0.025,0.25,0.5,0.75,0.975)))
+
+round(rbind(dist.adj,dist.rand.quantiles,dist.sn),3)
+```
+
+
+Let's compare the three dissimilarity metrics based on dissimilarities among all samples. 
+
+```{r all_distances, cache=TRUE, message = FALSE, warning=FALSE,tidy=TRUE}
+distance.all.chord <- dist(sqrt(pollen.prop),diag=FALSE,upper=FALSE,method='euclidean')
+distance.all.euclid <- dist(pollen.prop,diag=FALSE,upper=FALSE,method='euclidean')
+distance.all.bray <- vegan::vegdist(pollen.prop,diag=FALSE,upper=FALSE,method='bray')
+
+
+summary(distance.all.chord)
+summary(distance.all.bray)
+summary(distance.all.euclid)
+
+total.distances <- cbind(distance.all.chord,distance.all.euclid,distance.all.bray)
+colnames(total.distances) <-c('chord','euclidean','bray')
+
+# jpeg('~/teaching/R/distance_pairs.jpeg',height=10,width=10,units='in',res =300)
+#   pairs(total.distances,pch = 16,cex = 0.5)
+# dev.off()
+```
+
+![*Fig 2. Comparison of dissimilarity metrics*](/home/mathias/teaching/R/distance_pairs.jpeg) 
+
+From *Fig. 2* it is clear that the euclidean distance is quite different from the two other dissimilarity metrics. Euclidean distances vary widely for large chord and Bray-Curtis distances. The Bray-Curtis distance is designed to quantify compositional dissimilarity between sites. We can therefore confirm that euclidean distances are not appropriate for compositional data.  
+
+People interested in further comparisons between Bray-Curtis and euclidean distances can work through the next section. In this section have a closer look at samples with large Bray-Curtis but low euclidean distances. You will have to set options *echo = TRUE* and *eval=TRUE* to show code and results in your output file  
+
+
+```{r advanceddistances, echo = FALSE, eval =FALSE,tidy=TRUE}
+distance.all.chord <- as.matrix(dist(sqrt(pollen.prop),diag=TRUE,upper=TRUE,method='euclidean'))
+distance.all.euclid <- as.matrix(dist(pollen.prop,diag=TRUE,upper=TRUE,method='euclidean'))
+distance.all.bray <- as.matrix(vegan::vegdist(pollen.prop,diag=TRUE,upper=TRUE,method='bray'))
+
+large.bray <- which(distance.all.bray>0.9, arr.ind=TRUE)
+small.euclidean <- which(distance.all.euclid<0.6, arr.ind=TRUE)
+large.bray.col.one <- large.bray[large.bray[,2]==1,]
+small.euclidean.col.one <- small.euclidean[small.euclidean[,2]==1,]
+ind.diff <- large.bray.col.one[large.bray.col.one[,1]%in%small.euclidean.col.one[,1],1]
+ind.diff <- unname(ind.diff)
+
+massif.diff <- pollen.prop[c(1,min(ind.diff)),]
+occuring.taxa <- massif.diff[,colSums(massif.diff)>0]
+common.taxa <- massif.diff[,((massif.diff[1,]>0)&(massif.diff[2,]>0))]
+100*round(occuring.taxa[,order(occuring.taxa[1,],decreasing=TRUE)],4)
+#large abundances of Mountain Alder (alnus viridis sub crispa), black spruce, cyperacea and Birch (>80% other sample has 2% of these taxa)
+100*round(occuring.taxa[,order(occuring.taxa[2,],decreasing=TRUE)],4)
+# large abundances of Red maple, Oak, undiff. Alder, Ambrosia (>60%) other sample ~1%
+```
+
+
+***
+
+## 2 The modern analogue technique
+
+Before reconstructing an environmental variable, we usually assess how MAT performs in the modern species assemblage. This step is usually referred to as calibration 
+
+### Calibration
+
+We will use the foraminifera data set by Imbrie and Kipp (1971) available in the *rioja* r-package by Steve Juggins. We will evaluate a MAT model for summer sea surface temperature (SumSST). For this purpose we will use the *MAT* function from the *rioja* r-package (as default this function uses *chord-distances*). (I generally recommend to specify the r-package from which a function should be used. For instance there are *crossval* and *performance* functions in *rioja* as well as *analogue*. The aforementioned packages also have functions *Merge* and *merge*, *MAT* and *mat* asf) 
+
+```{r calib,  cache=TRUE, message = FALSE, warning=FALSE,tidy=TRUE}
+data(IK)
+?IK
+spp<-IK$spec/100
+fossil <- IK$core/100
+sppfos<-Merge(spp, fossil, split=TRUE)
+spp <- sppfos$spp
+fossil <- sppfos$fossil
+SumSST<-IK$env$SumSST
+
+sumsst.mat.model <- rioja::MAT(spp,SumSST,k=5,lean = FALSE,dist.method='chord')
+plot(sumsst.mat.model)
+```
+
+Ideally, a calibration function is trained on one portion of the modern species assemblages (calibration set) and applied to another portion of the modern species assemblages (validation set). This two data sets are mutually exclusive and hopefully independent. To validate or cross-validate MAT, we usually use a technique called k-fold cross-validation. In k-fold cross-validation the modern data set is split into k mutually exclusive parts. k-1 parts are then used for calibration and one part is used for validation (test). 
+
+```{r cv,cache=TRUE, message = FALSE, warning=FALSE,tidy=TRUE}
+cv.sumsst.mat.model <- rioja::crossval(sumsst.mat.model,cv.method='lgo',verbose=FALSE)
+plot(cv.sumsst.mat.model)
+perf.cv.sumsst.mat.model <- rioja::performance(cv.sumsst.mat.model)
+perf.cv.sumsst.mat.model
+```
+
+The code returns an object with three named components:
+
+* RMSE0: The root mean square error when using the mean of all SumSST values instead of predicted values
+* object: apparent performance statistics (all data are used for calibration)
+* crossval: cross-validated performance statistics (model is tested on a hopefully independent test set)
+
+### Reconstruction
+
+We can apply this transfer function to foraminifera from a sediment core. 
+
+```{r}
+depths <- as.numeric(rownames(fossil))
+pred <- predict(sumsst.mat.model ,fossil)
+plot(depths, pred$fit[,'MAT'],type='l',ylab ='T [C]')
+```
+
+It is crucial to assess the quality of modern analogues by looking at the dissimilarity between a fossil assemblage and the closest (least dissimilar) modern assemblage. If the shortest distance between a fossil assemblage and the modern assemblages is typical of distances between similar assemblages in the calibration set, then we can declare that the analogue match is good. The usual rule-of-thumb is that distances shorter than the 5th percentile of all distances between calibration set assemblages represent good analogues, and distances greater than the 10th percentile represent no-analogue assemblages.    
+
+```{r}
+goodpoorbad<-quantile(paldist(spp,dist.method='chord'), prob=c(0.05, 0.1))
+plot(depths, pred$dist.n[,1], ylab="Chord distance", xlab="Depth")
+abline(h=goodpoorbad, col=c("orange", "red"))
+```
+
+After assessing analogue quality we should (if possible) our reconstruction to existing reconstructions. We can also tentatively assess the significance of our reconstruction comparing the variance of the fossil species assemblages explained by our reconstruction to the variance explained by reconstructions trained on random data.  
+
+```{r}
+library(palaeoSig)
+IKrand <- randomTF(spp = spp, env = data.frame(SumSST = SumSST),fos = fossil,fun =MAT, dist.method = 'chord',n = 999,col=1)
+plot(IKrand)
+```
+
+
+
+### How many variables can we reconstruct?
+
+We will try to answer this question using the NAMPD. 
+
+
+```{r cache =TRUE}
+mat.model.mtwa <- rioja::MAT(pollen.prop,Climate$mtwa,lean=FALSE)
+#mat.model.mtwa <- rioja::MAT(sqrt(pollen.prop),as.vector(Climate$mtwa),lean=FALSE,method='euclidean')
+#---------------------------------------------------------------------------------------------------------------
+#curcial step: cross-validation, apply calibrate on one part of the dataset and validate on a (hopefully)
+# independent dataset, with the MAT one usually uses 10-fold cross-validation
+cv.mat.model.mtwa <- rioja::crossval(mat.model.mtwa,verbose=FALSE)
+per.mat.model.mtwa <- rioja::performance(cv.mat.model.mtwa)
+plot(cv.mat.model.mtwa)
+```
+
+
+```{r chache =TRUE}
+mat.model.lon <- rioja::MAT(pollen.prop,lon,lean=FALSE)
+
+#---------------------------------------------------------------------------------------------------------------
+#curcial step: cross-validation, apply calibrate on one part of the dataset and validate on a (hopefully)
+# independent dataset, with the MAT one usually uses 10-fold cross-validation
+
+cv.mat.model.lon <- rioja::crossval(mat.model.lon,verbose=FALSE)
+
+per.mat.model.lon <- rioja::performance(cv.mat.model.lon)
+
+#explain what we see: RMSE0: variance of the dataset, RMSE if I would always use the mean of the entire dataset
+#object: aaparent stats
+#cross-val: cross-validated 
+
+#----------------------------------------------------------------------------------------------------------------
+# plot the cross-validated model
+plot(cv.mat.model.lon)
+```
+
+
+
+```{r cache =TRUE}
+# mat.model <- lapply(colnames(Climate),function(x){
+#   rioja::MAT(pollen.prop,as.vector(Climate[,x]),lean=FALSE)
+# })
+# 
+# names(mat.model) <- colnames(Climate)
+# 
+# crossval.mat <- lapply(names(mat.model),function(x){
+#   rioja::crossval(mat.model[[x]],verbose=FALSE)
+# })
+# 
+# names(crossval.mat) <- colnames(Climate)
+# 
+# perf.mat <- lapply(names(mat.model),function(x){
+#   rioja::performance(crossval.mat[[x]])
+# })
+# 
+# names(perf.mat) <- colnames(Climate)
+# 
+# saveRDS(perf.mat,'~/teaching/R/calibration_MAT_RDS')
+
+perf.mat <- readRDS('~/teaching/R/calibration_MAT_RDS')
+perf.mat
+
+```
+
+Can we really reconstruct 32 variables? Probably not! Why could 32 variables seem reconstructable?
+
+* spatial correlation between variables (does not mean there is a temporal correlation)
+* spatial autocorrelation
+
+**To obtain a good reconstruction, we should first ask the question: does this reconstruction make sense ecologically?**
+
+### Spatial autocorrelation
+
+Environmental variables influencing species are composition are often spatially autocorrelated (e.g. summer temperatures at spatially close locations are more similar than summer temperatures at spatially distant locations). This is not in itself a problem. If an environmental variable influencing species assemblages is spatially autocorrelated, spatially close assemblages tend to be similar. The similarity of spatially close assemblages in turn means that sites chosen as analogues are spatially close. This again means that any spatially autocorrelated variable will perform well under cross-validation, even if it is globally unrelated to the variable influencing species assemblages. 
+For instance, we saw that longitudes perform well under cross-validation. As another example let's look at another (obviously nonsensical) variable: distance to Calgary:
+
+```{r calgary,cache=TRUE, message = FALSE, warning=FALSE,tidy=TRUE}
+library(fields)
+coord.calgary <- matrix(c(-114,51),ncol=2)
+
+dist.calgary <- t(rdist.earth(coord.calgary,cbind(lon,lat)))
+
+cor.env.var <- round(cor(dist.calgary,Climate),2)
+print(cor.env.var)
+
+mat.calgary <- rioja::MAT(y = pollen.prop,dist.calgary,lean=FALSE) 
+cv.calgary <- rioja::crossval(mat.calgary,verbose=FALSE)
+perf.calgary <- rioja::performance(cv.calgary)
+plot(cv.calgary)
+
+plot(dist.calgary,Climate$mtwa)
+```
+
+It is possible to assess the influence of spatial autocorrelation using h-block cross-validation. Under h-block cross-validation samples with in radius *h* of the predicted sample are removed from the calibration data set. 
+One problem of h-block cross-validation is that we one the one hand account for artificial skill caused by spatial autocorrelation but on the other hand remove taxonomically close modern analogues also removing true skill. 
+
+```{r h.block,cache=TRUE, message = FALSE, warning=FALSE}
+dist.h <- rdist.earth(cbind(lon,lat),cbind(lon,lat))
+cv.calgary.h.block <- rioja::crossval(mat.calgary,h.cutoff = 500,h.dist=dist.h,cv.method = 'h-block',verbose=FALSE)
+plot(dist.calgary,cv.calgary.h.block$predicted[,'N05'])
+abline(a=0,b=1,lty=2)
+
+rioja::performance(cv.calgary.h.block)
+#-------------------------------------------------------------------------------------------------------------------
+#compare this to h-block cross-validation of the mtwa model
+cv.mtwa.h.block <- rioja::crossval(mat.model.mtwa,h.cutoff = 500,h.dist=dist.h,cv.method = 'h-block',verbose=FALSE)
+plot(Climate$mtwa,cv.mtwa.h.block$predicted[,'N05'])
+abline(a=0,b=1,lty=2)
+
+rioja::performance(cv.mtwa.h.block)
+```
+
+If you are interested in effects of spatial autocorrelation on transfer function performance and how to detect spatial autocorrelation you can work through some examples of the *palaeoSig* r-package by Richard Telford. 
+
+```{r eval=FALSE}
+library(palaeoSig)
+?rne
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
