@@ -10,6 +10,10 @@ knitr::opts_chunk$set(echo = TRUE)
 cache = TRUE
 ```
 
+To run this .Rmd file, you have to change file paths in lines *134* and *290*. 
+
+
+
 ## 1 Dissimilarity / distance metrics 
 
 The modern analogue technique is a statistical technique used to reconstruct past environments and climates. To reconstruct past environments, we need three data sets: 
@@ -127,7 +131,7 @@ colnames(total.distances) <-c('chord','euclidean','bray')
 # dev.off()
 ```
 
-![*Fig 2. Comparison of dissimilarity metrics*](/home/mathias/teaching/R/distance_pairs.jpeg) 
+![*Fig 2. Comparison of dissimilarity metrics*](/figures/distance_pairs.jpeg) 
 
 From *Fig. 2* it is clear that the euclidean distance is quite different from the two other dissimilarity metrics. Euclidean distances vary widely for large chord and Bray-Curtis distances. The Bray-Curtis distance is designed to quantify compositional dissimilarity between sites. We can therefore confirm that euclidean distances are not appropriate for compositional data.  
 
@@ -281,9 +285,9 @@ plot(cv.mat.model.lon)
 # 
 # names(perf.mat) <- colnames(Climate)
 # 
-# saveRDS(perf.mat,'~/teaching/R/calibration_MAT_RDS')
+# saveRDS(perf.mat,'/data/calibration_MAT_RDS')
 
-perf.mat <- readRDS('~/teaching/R/calibration_MAT_RDS')
+perf.mat <- readRDS('/data/calibration_MAT_RDS')
 perf.mat
 
 ```
