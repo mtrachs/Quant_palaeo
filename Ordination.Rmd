@@ -1,0 +1,118 @@
+---
+title: 'Ordinations: Principal components analysis and correspondence analysis'
+output:
+  html_document:
+    df_print: paged
+---
+
+## Pre-class work:
+
+Load the environmental data associated with the arctic pollen data available from the palaeoSig r-package.
+
+```{r}
+library(palaeoSig)
+data(arctic.env)
+```
+
+Run a principal components analysis on the environmental data related to temperature, precipitation and sunshine (columns 9 through 49). Compare the function *princomp (stats)*, *prcomp (stats)*  and *rda (vegan)* and explore the effects of options *cor (princomp)*, *center (prcomp)*  and *scale (rda)* making screeplots using function *screeplot (stats)*.
+
+
+
+## Class work:
+
+Let’s reproduce results of pre-class work computing eigenvalue decompositions on covariance and correlation matrices of environmental data.
+
+Functions *cov* and *cor* compute covariances and correlations among environmental variables and *eigen* computes eigenvalue decompositions.
+
+We should be able to reproduce screeplots plotting eigenvalues *(myobject$values)*.
+
+**_Compute eigenvalue decompositions on covariance and correlation matrices and plot the eigenvalues_**.   
+
+The sum of all eigenvalues equals the total variance of our dataset. 
+
+**_Compute variance explained by each principal component_**.
+
+In class we discussed principal components scores. Principal components scores are obtained from an rda object using function *scores (vegan)*.
+
+**_Extract principal components from the rda object using the correlation matrix_**.
+
+To reproduce PC-scores we need eigenvectors. Eigenvectors are computed during eigenvalue decomposition and obtained via *myobject$vector*. The first column of this matrix is the first eigenvector. We need the first eigenvector to obtain PC-scores of axis 1. An eigenvector assigns a coefficient (species score) to each variable in a dataset. For one site/sample we have to multiply the coefficient with the according (scaled) environmental variable. Thereafter we have to sum over all products. This is the site/sample score of this specific  site/sample.
+
+**_Compute PC1-scores manually._** 
+
+Hint either 
+
+```{r,eval=FALSE}
+apply(...,1, ...  sum(mysample*eigenvector)
+as.matrix(mymatrix)%*%eigenvector  (matrix multiplication)
+```
+
+**_Compare the two sets of PC1-scores_**
+
+These scores are not identical due to different scalings, but their correlation is r = 1.
+
+As an aside, for scaled variables/correlation matrices, multiplying an eigenvector with the square-root of its eigenvalue gives the correlation between variables and the PC. The sum of squared correlations is the eigenvalue of the PC. 
+
+
+The goal of this slightly tedious exercise is to show that PCA is based on correlations/covariances among variables, some magic (eigenvalue decompositon) and then a simple linear combination of variables and some coefficients. 
+
+
+## Correspondence analysis
+ 
+Correspondence analysis is an ordination analysis closely related to PCA. The main difference is that PCA works with euclidean distances among samples and CA with chi-square distances. Another important difference is that PCA assumes a linear increase/decrease of a species along a gradient whereas CA allows for unimodal responses (i.e. increase and subsequent decrease). 
+Mathematically, in CA the data matrix is pre-transformed and species and site scores are weighted. 
+
+We will first have a look at a very nice dataset and subsequently deal with somewhat problematic datasets.
+
+ 
+**Perfect dataset:**
+
+TBA
+
+
+
+**Problematic datset1: Abernethy forest**
+
+```{r}
+library(analogue)
+data(abernethy)
+abernethy2 <- abernethy[,!colnames(abernethy)%in%c('Age','Depth')]
+``` 
+
+**_Run pca on the Abernethy dataset, make a ordination biplot and describe this biplot._**
+```{r,eval=FALSE}
+rda()
+plot(,scaling =3)
+``` 
+
+
+**_Run pca on the square root-transformed Abernethy dataset, make a ordination biplot and describe this biplot._**
+
+
+**_Run ca on the square root-transformed Abernethy dataset, make a ordination biplot and describe this biplot._**
+```{r,eval=FALSE}
+cca()
+plot(,scaling =3)
+```  
+
+Problematic datset2: Arctic pollen data
+
+```{r}
+data(arctic.pollen)
+```
+
+**_Run ca on the square root-transformed Arctic pollen dataset, make a ordination biplot and describe this biplot._**
+
+For this dataset we can explain the … effect modelling temperature of the warmest months as function PC1 and PC2 scores using a (generalised) additive model.
+
+**_Fit an ordination surface to the Arctic pollen ordination biplot._**
+
+```{r,eval=FALSE}
+ordisurf(myca,mydata$mtwa,add=TRUE)
+```
+
+
+
+
+
+
